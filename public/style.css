@@ -13,6 +13,11 @@ main {
 #graphical-color-inputs {
     display: grid;
     grid: auto / 360px 36px;
+    touch-action: none;
+}
+
+#graphical-color-inputs * {
+    touch-action: none;
 }
 
 #color-box {
