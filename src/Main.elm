@@ -11,6 +11,11 @@ import Json.Decode as Json
 port setPointerCapture : ( String, Int ) -> Cmd msg
 
 
+type ScrollDirection
+    = ScrollDown
+    | ScrollUp
+
+
 type alias Rgb =
     { red : Int
     , green : Int
@@ -88,7 +93,7 @@ type Msg
     | ChangeRed String
     | ChangeGreen String
     | ChangeBlue String
-    | DoNothing
+    | ScrollLightnessSlider ScrollDirection
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -167,8 +172,32 @@ update msg model =
         ChangeBlue newBlueValue ->
             ( adjustHsl { model | blueValue = newBlueValue }, Cmd.none )
 
-        DoNothing ->
-            ( model, Cmd.none )
+        ScrollLightnessSlider scrollDirection ->
+            case model.dragging of
+                Nothing ->
+                    (
+                        { model
+                        | lightnessPosition =
+                            clamp 0 1
+                                (model.lightnessPosition
+                                + case scrollDirection of
+                                    ScrollUp ->
+                                        -scrollSensitivity
+                                    
+                                    ScrollDown ->
+                                        scrollSensitivity)
+                        }
+                    ,
+                        Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+
+scrollSensitivity : Float
+scrollSensitivity =
+    0.1
 
 
 idOf : PickerElement -> String
@@ -383,6 +412,7 @@ view model =
                         [ id "lightness-slider-colors"
                         , lightnessGradient model.pickerPosition
                         , onPointerDown (Grab LightnessSlider)
+                        , on "wheel" (Json.map ScrollLightnessSlider wheelScrollDirection)
                         , classList [( "grabbing", model.dragging == Just LightnessSlider )]
                         ]
                         []
@@ -479,6 +509,16 @@ view model =
                 ]
             ]
         ]
+
+
+wheelScrollDirection : Json.Decoder ScrollDirection
+wheelScrollDirection =
+    Json.map (\ deltaY ->
+        if deltaY < 0 then
+            ScrollUp
+        else
+            ScrollDown)
+        (Json.field "deltaY" Json.float)
 
 
 onPointerDown : (Int -> msg) -> Html.Attribute msg
