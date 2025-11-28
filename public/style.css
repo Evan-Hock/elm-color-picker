@@ -32,9 +32,10 @@ main {
     cursor: grab;
 }
 
-#color-box:active,
-#color-box :active,
-#lightness-slider:active {
+#color-box.grabbing,
+#lightness-slider.grabbing,
+#lightness-slider-colors.grabbing,
+#lightness-slider-indicator.grabbing {
     cursor: grabbing;
 }
 
@@ -103,3 +104,4 @@ label {
 input {
     min-width: 0;
 }
+

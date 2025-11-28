@@ -359,10 +359,11 @@ view model =
                     , onPointerDown (Grab ColorBox)
                     , onPointerMove Drag
                     , onPointerUp Release
+                    , classList [( "grabbing", model.dragging == Just ColorBox )]
                     ]
                     [ canvas
                         [ id "color-box-canvas"
-                        , preventDefaultOn "pointerdown" (Json.succeed ( DoNothing, True ))
+                        -- , preventDefaultOn "pointerdown" (Json.succeed ( DoNothing, True ))
                         , width 360
                         , height 360
                         ]
@@ -378,17 +379,20 @@ view model =
                     [ id (idOf LightnessSlider)
                     , onPointerMove Drag
                     , onPointerUp Release
+                    , classList [( "grabbing", model.dragging == Just LightnessSlider )]
                     ]
                     [ div
                         [ id "lightness-slider-colors"
                         , lightnessGradient model.pickerPosition
                         , onPointerDown (Grab LightnessSlider)
+                        , classList [( "grabbing", model.dragging == Just LightnessSlider )]
                         ]
                         []
                     , div
                         [ id "lightness-slider-indicator"
                         , onPointerDown (Grab LightnessSlider)
                         , style "bottom" ("calc(" ++ percent model.lightnessPosition ++ " - 18px)")
+                        , classList [( "grabbing", model.dragging == Just LightnessSlider )]
                         ]
                         []
                     ]
