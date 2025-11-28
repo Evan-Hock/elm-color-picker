@@ -182,10 +182,10 @@ update msg model =
                                 (model.lightnessPosition
                                 + case scrollDirection of
                                     ScrollUp ->
-                                        -scrollSensitivity
+                                        scrollSensitivity
                                     
                                     ScrollDown ->
-                                        scrollSensitivity)
+                                        -scrollSensitivity)
                         }
                     ,
                         Cmd.none
@@ -513,11 +513,13 @@ view model =
 
 wheelScrollDirection : Json.Decoder ScrollDirection
 wheelScrollDirection =
-    Json.map (\ deltaY ->
-        if deltaY < 0 then
-            ScrollUp
-        else
-            ScrollDown)
+    Json.map
+        (\ deltaY ->
+            if deltaY < 0 then
+                ScrollUp
+            else
+                ScrollDown
+        )
         (Json.field "deltaY" Json.float)
 
 
