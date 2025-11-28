@@ -8,7 +8,6 @@ import Html.Events exposing (onInput)
 import Html.Events exposing (on, preventDefaultOn, stopPropagationOn)
 import Json.Decode as Json
 
-
 port setPointerCapture : ( String, Int ) -> Cmd msg
 
 
@@ -253,8 +252,8 @@ adjustHsl model =
     
 
 -- Let's not hardcode this eventually
-colorPickerSize : Int
-colorPickerSize =
+colorBoxSize : Int
+colorBoxSize =
     360
 
 
@@ -363,9 +362,8 @@ view model =
                     ]
                     [ canvas
                         [ id "color-box-canvas"
-                        -- , preventDefaultOn "pointerdown" (Json.succeed ( DoNothing, True ))
-                        , width 360
-                        , height 360
+                        , width colorBoxSize
+                        , height colorBoxSize
                         ]
                         []
                     , div
@@ -548,7 +546,7 @@ adjustMouseCoordinates x y =
 
 proportionOffset : Float -> Float
 proportionOffset x =
-    clamp 0 1 (x / toFloat colorPickerSize)
+    clamp 0 1 (x / toFloat colorBoxSize)
         
         
 subscriptions : Model -> Sub Msg
