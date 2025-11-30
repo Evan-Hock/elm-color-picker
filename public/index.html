@@ -9,11 +9,34 @@
 <body>
     <main id="app"></main>
     <script type="text/javascript">
+        "use strict";
         (function () {
+            function rawTextOf(element) {
+                var textNodes = [];
+                var treeWalker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+                for (var currNode = treeWalker.nextNode(); currNode !== null; currNode = treeWalker.nextNode()) {
+                    textNodes.push(currNode.textContent);
+                }
+
+                return textNodes.join("");
+            }
+
             var app = Elm.Main.init({ node: document.getElementById("app") });
 
             app.ports.setPointerCapture.subscribe(([elementId, pointerId]) => {
                 document.getElementById(elementId).setPointerCapture(pointerId);
+            });
+
+            app.ports.copyToClipboard.subscribe((elementId) => {
+                navigator.clipboard.writeText(rawTextOf(document.getElementById(elementId)))
+                    .then(
+                        () => {
+                            app.ports.acknowledgeClipboardSuccess.send(null);
+                        },
+                        (error) => {
+                            app.ports.acknowledgeClipboardFailure.send(error.message);
+                        }
+                    );
             });
 
             var colorBoxCanvas = document.getElementById("color-box-canvas");

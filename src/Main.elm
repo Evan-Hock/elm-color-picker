@@ -4,11 +4,23 @@ import Browser
 import Browser.Events
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onInput)
+import Html.Events exposing (onInput, onClick)
 import Html.Events exposing (on, preventDefaultOn, stopPropagationOn)
 import Json.Decode as Json
+import Process
+import Task
 
 port setPointerCapture : ( String, Int ) -> Cmd msg
+port copyToClipboard : String -> Cmd msg
+port acknowledgeClipboardSuccess : (() -> msg) -> Sub msg
+port acknowledgeClipboardFailure : (String -> msg) -> Sub msg
+
+
+type alias PointerEvent =
+    { pointerId : Int
+    , offsetX : Float
+    , offsetY : Float
+    }
 
 
 type ScrollDirection
@@ -39,6 +51,18 @@ type PickerElement
     | LightnessSlider
 
 
+type ClipboardTarget
+    = HSLOutput
+    | RGBOutput
+
+
+type ClipboardStatus
+    = ClipboardIdle
+    | ClipboardAwaiting ClipboardTarget
+    | ClipboardSuccess ClipboardTarget
+    | ClipboardFailure ClipboardTarget String
+
+
 type alias Model =
     { pickerPosition : Vector2 Float
     , lightnessPosition : Float
@@ -49,6 +73,7 @@ type alias Model =
     , redValue : String
     , greenValue : String
     , blueValue : String
+    , clipboardStatus : ClipboardStatus
     }
     
     
@@ -75,6 +100,7 @@ initialModel =
         , redValue = String.fromInt initialRgb.red
         , greenValue = String.fromInt initialRgb.green
         , blueValue = String.fromInt initialRgb.blue
+        , clipboardStatus = ClipboardIdle
         }
     
 
@@ -84,8 +110,8 @@ init () =
 
 
 type Msg
-    = Grab PickerElement Int
-    | Release (Vector2 Float)
+    = Grab PickerElement PointerEvent
+    | Release
     | Drag (Vector2 Float)
     | ChangeHue String
     | ChangeSaturation String
@@ -94,20 +120,24 @@ type Msg
     | ChangeGreen String
     | ChangeBlue String
     | ScrollLightnessSlider ScrollDirection
+    | CopyToClipboard ClipboardTarget
+    | AcknowledgeClipboardSuccess
+    | AcknowledgeClipboardFailure String
+    | ClearClipboardStatusInfo
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Grab grabbedElement thePointerId ->
-            ( { model | dragging = Just grabbedElement }, setPointerCapture ( idOf grabbedElement, thePointerId ) )
+        Grab grabbedElement thePointer ->
+            (
+                { model | dragging = Just grabbedElement }
+            ,
+                setPointerCapture ( pickerId grabbedElement, thePointer.pointerId )
+            )
             
-        Release mousePosition ->
-            let
-                updatedPositions =
-                    updatePositions mousePosition model
-            in
-                ( { updatedPositions | dragging = Nothing }, Cmd.none )
+        Release ->
+            ( { model | dragging = Nothing }, Cmd.none )
 
         Drag mousePosition ->
             ( updatePositions mousePosition model, Cmd.none )
@@ -194,20 +224,63 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        CopyToClipboard clipboardTarget ->
+            ( { model | clipboardStatus = ClipboardAwaiting clipboardTarget }, copyToClipboard (clipboardId clipboardTarget) )
+
+        AcknowledgeClipboardSuccess ->
+            case model.clipboardStatus of
+                ClipboardAwaiting target ->
+                    ( { model | clipboardStatus = ClipboardSuccess target }, clearClipboardStatus )
+                
+                _ ->
+                    ( model, Cmd.none )
+
+        AcknowledgeClipboardFailure errorMessage ->
+            case model.clipboardStatus of
+                ClipboardAwaiting target ->
+                    ( { model | clipboardStatus = ClipboardFailure target errorMessage }, clearClipboardStatus )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ClearClipboardStatusInfo ->
+            ( { model | clipboardStatus = ClipboardIdle }, Cmd.none )
+
+
+clearClipboardStatus : Cmd Msg
+clearClipboardStatus =
+    Process.sleep clipboardStatusTimeoutMs
+    |> Task.perform (\ _ -> ClearClipboardStatusInfo)
+
+
+clipboardStatusTimeoutMs : Float
+clipboardStatusTimeoutMs =
+    1000
+
 
 scrollSensitivity : Float
 scrollSensitivity =
     0.1
 
 
-idOf : PickerElement -> String
-idOf pickerElement =
+pickerId : PickerElement -> String
+pickerId pickerElement =
     case pickerElement of
         ColorBox ->
             "color-box"
         
         LightnessSlider ->
             "lightness-slider"
+
+
+clipboardId : ClipboardTarget -> String
+clipboardId clipboardTarget =
+    case clipboardTarget of
+        HSLOutput ->
+            "hsl-css-output"
+
+        RGBOutput ->
+            "rgb-css-output"
 
 
 updatePositions : Vector2 Float -> Model -> Model
@@ -383,7 +456,7 @@ view model =
         [ Html.form [id "color-picker"]
             [ div [id "graphical-color-inputs"]
                 [ div
-                    [ id (idOf ColorBox)
+                    [ id (pickerId ColorBox)
                     , onPointerDown (Grab ColorBox)
                     , onPointerMove Drag
                     , onPointerUp Release
@@ -403,7 +476,7 @@ view model =
                         []
                     ]
                 , div
-                    [ id (idOf LightnessSlider)
+                    [ id (pickerId LightnessSlider)
                     , onPointerMove Drag
                     , onPointerUp Release
                     , classList [( "grabbing", model.dragging == Just LightnessSlider )]
@@ -507,8 +580,46 @@ view model =
                         []
                     ]
                 ]
+            , div [id "color-outputs"]
+                [ cssOutput HSLOutput ("hsl(" ++ model.hueValue ++ "deg " ++ model.satValue ++ "% " ++ model.lightValue ++ "%)") model
+                , cssOutput RGBOutput ("rgb(" ++ model.redValue ++ " " ++ model.greenValue ++ " " ++ model.blueValue ++ ")") model
+                ]
             ]
         ]
+
+
+cssOutput : ClipboardTarget -> String -> Model -> Html Msg
+cssOutput thisClipboardTarget content model =
+    output
+        [ id (clipboardId thisClipboardTarget)
+        , classList
+            [ ( "css-output", True )
+            , ( "success", isClipboardSuccess thisClipboardTarget model.clipboardStatus )
+            , ( "failure", isClipboardFailure thisClipboardTarget model.clipboardStatus )
+            ]
+        , onClick (CopyToClipboard thisClipboardTarget)
+        ]
+        [text content]
+
+
+isClipboardSuccess : ClipboardTarget -> ClipboardStatus -> Bool
+isClipboardSuccess thisClipboardTarget clipboardStatus =
+    case clipboardStatus of
+        ClipboardSuccess successfulTarget ->
+            thisClipboardTarget == successfulTarget
+
+        _ ->
+            False
+
+
+isClipboardFailure : ClipboardTarget -> ClipboardStatus -> Bool
+isClipboardFailure thisClipboardTarget clipboardStatus =
+    case clipboardStatus of
+        ClipboardFailure failedTarget _ ->
+            thisClipboardTarget == failedTarget
+
+        _ ->
+            False
 
 
 wheelScrollDirection : Json.Decoder ScrollDirection
@@ -523,9 +634,9 @@ wheelScrollDirection =
         (Json.field "deltaY" Json.float)
 
 
-onPointerDown : (Int -> msg) -> Html.Attribute msg
+onPointerDown : (PointerEvent -> msg) -> Html.Attribute msg
 onPointerDown toMsg =
-    on "pointerdown" (Json.map toMsg pointerId)
+    on "pointerdown" (Json.map toMsg pointer)
 
 
 onPointerMove : (Vector2 Float -> msg) -> Html.Attribute msg
@@ -533,14 +644,22 @@ onPointerMove toMsg =
     on "pointermove" (Json.map toMsg mouseOffsets)
 
 
-onPointerUp : (Vector2 Float -> msg) -> Html.Attribute msg
-onPointerUp toMsg =
-    on "pointerup" (Json.map toMsg mouseOffsets)
+onPointerUp : msg -> Html.Attribute msg
+onPointerUp msg =
+    on "pointerup" (Json.succeed msg)
 
 
-pointerId : Json.Decoder Int
-pointerId =
-    Json.field "pointerId" Json.int
+pointer : Json.Decoder PointerEvent
+pointer =
+    Json.map2
+        (\ pointerId ( offsetX, offsetY ) ->
+            { pointerId = pointerId
+            , offsetX = offsetX
+            , offsetY = offsetY
+            }
+        )
+        (Json.field "pointerId" Json.int)
+        mouseOffsets
         
         
 lightnessGradient : Vector2 Float -> Html.Attribute Msg
@@ -593,7 +712,10 @@ proportionOffset x =
         
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Sub.batch
+        [ acknowledgeClipboardSuccess (\ _ -> AcknowledgeClipboardSuccess)
+        , acknowledgeClipboardFailure AcknowledgeClipboardFailure
+        ]
 
 
 main : Program () Model Msg
