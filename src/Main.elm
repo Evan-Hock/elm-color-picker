@@ -205,9 +205,8 @@ update msg model =
         ScrollLightnessSlider scrollDirection ->
             case model.dragging of
                 Nothing ->
-                    (
-                        { model
-                        | lightnessPosition =
+                    let
+                        newLightnessPosition =
                             clamp 0 1
                                 (model.lightnessPosition
                                 + case scrollDirection of
@@ -216,10 +215,16 @@ update msg model =
                                     
                                     ScrollDown ->
                                         -scrollSensitivity)
-                        }
-                    ,
-                        Cmd.none
-                    )
+                    in
+                        (
+                            { model
+                            | lightnessPosition = newLightnessPosition
+                            , lightValue = percentageValue newLightnessPosition
+                            }
+                            |> adjustRgb
+                        ,
+                            Cmd.none
+                        )
 
                 _ ->
                     ( model, Cmd.none )
@@ -380,7 +385,7 @@ hslToRgb { hue, saturation, lightness } =
         f n =
             let
                 k =
-                    n + hue / 12
+                    n + (12 * hue)
                     |> floatModByInt 12
             in
                 lightness - alpha * Basics.max -1 (Basics.min (k - 3) (Basics.min (9 - k) 1))
