@@ -1,59 +1,57 @@
 <!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="style.css" type="text/css">
+        <script charset="utf8" src="elm.js" type="text/javascript"></script>
+    </head>
 
-<head>
-    <meta charset="utf8" lang="en-US">
-    <link rel="stylesheet" href="style.css" type="text/css">
-    <script charset="utf8" src="elm.js" type="text/javascript"></script>
-</head>
+    <body>
+        <main id="app"></main>
+        <script type="text/javascript">
+            "use strict";
+            (function () {
+                function rawTextOf(element) {
+                    var textNodes = [];
+                    var treeWalker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+                    for (var currNode = treeWalker.nextNode(); currNode !== null; currNode = treeWalker.nextNode()) {
+                        textNodes.push(currNode.textContent);
+                    }
 
-<body>
-    <main id="app"></main>
-    <script type="text/javascript">
-        "use strict";
-        (function () {
-            function rawTextOf(element) {
-                var textNodes = [];
-                var treeWalker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-                for (var currNode = treeWalker.nextNode(); currNode !== null; currNode = treeWalker.nextNode()) {
-                    textNodes.push(currNode.textContent);
+                    return textNodes.join("");
                 }
 
-                return textNodes.join("");
-            }
+                var app = Elm.Main.init({ node: document.getElementById("app") });
 
-            var app = Elm.Main.init({ node: document.getElementById("app") });
+                app.ports.setPointerCapture.subscribe(([elementId, pointerId]) => {
+                    document.getElementById(elementId).setPointerCapture(pointerId);
+                });
 
-            app.ports.setPointerCapture.subscribe(([elementId, pointerId]) => {
-                document.getElementById(elementId).setPointerCapture(pointerId);
-            });
+                app.ports.copyToClipboard.subscribe((elementId) => {
+                    navigator.clipboard.writeText(rawTextOf(document.getElementById(elementId)))
+                        .then(
+                            () => {
+                                app.ports.acknowledgeClipboardSuccess.send(null);
+                            },
+                            (error) => {
+                                app.ports.acknowledgeClipboardFailure.send(error.message);
+                            }
+                        );
+                });
 
-            app.ports.copyToClipboard.subscribe((elementId) => {
-                navigator.clipboard.writeText(rawTextOf(document.getElementById(elementId)))
-                    .then(
-                        () => {
-                            app.ports.acknowledgeClipboardSuccess.send(null);
-                        },
-                        (error) => {
-                            app.ports.acknowledgeClipboardFailure.send(error.message);
-                        }
-                    );
-            });
-
-            var colorBoxCanvas = document.getElementById("color-box-canvas");
-            if (!colorBoxCanvas) {
-                throw new Error("Color picker canvas not found");
-            }
-
-            var colorBoxCtxt = colorBoxCanvas.getContext("2d");
-            for (var i = 0; i < 360; i++) {
-                for (var j = 0; j < 360; j++) {
-                    colorBoxCtxt.fillStyle =
-                        "hsl(" + String(i) + "deg " + String(100 * (1 - (j / 360))) + "% 50%)";
-                    colorBoxCtxt.fillRect(i, j, 1, 1);
+                var colorBoxCanvas = document.getElementById("color-box-canvas");
+                if (!colorBoxCanvas) {
+                    throw new Error("Color picker canvas not found");
                 }
-            }
-        }).call(this);
-    </script>
-</body>
 
+                var colorBoxCtxt = colorBoxCanvas.getContext("2d");
+                for (var i = 0; i < 360; i++) {
+                    for (var j = 0; j < 360; j++) {
+                        colorBoxCtxt.fillStyle =
+                            "hsl(" + String(i) + "deg " + String(100 * (1 - (j / 360))) + "% 50%)";
+                        colorBoxCtxt.fillRect(i, j, 1, 1);
+                    }
+                }
+            }).call(this);
+        </script>
+    </body>
 </html>
